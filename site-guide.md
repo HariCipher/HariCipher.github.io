@@ -19,6 +19,7 @@ a component.
 | Any colour, spacing, border, or font size | `client/src/index.css` |
 | The hero headline words | `client/src/components/Hero.tsx` |
 | How a section is laid out | its component in `client/src/components/` |
+| Get changes onto the live site | just `git push` — see §9 |
 
 ---
 
@@ -413,7 +414,48 @@ plate cropped straight onto the emptiness.
 
 ---
 
-## 9. Things that will bite you
+## 9. Deploying
+
+The site is live at **https://haricipher.github.io/**, served by GitHub Pages
+from `HariCipher/HariCipher.github.io`.
+
+**You never deploy by hand.** Push to `main` and
+`.github/workflows/deploy.yml` builds the site and publishes it — typically
+live a minute or two later. Watch it under the repo's Actions tab, or run
+`gh run watch`.
+
+What the workflow does that a local `pnpm build` does not:
+
+- runs **only** `vite build`. `pnpm build` also bundles the Express server,
+  which Pages cannot execute. Nothing on the page needs it — the portfolio is
+  entirely static, and the tRPC client in `main.tsx` is configured but never
+  queried, so it makes no requests.
+- copies `index.html` to **`404.html`**. Pages serves that file for any unknown
+  path, which hands the URL to the router instead of GitHub's own 404 page.
+- adds **`.nojekyll`**, or Pages would skip the `assets/` folder's files.
+- deletes `__manus__/`, the dev-only log collector.
+
+### Production leaves the dev tooling behind
+
+`vite.config.ts` loads the Manus plugins only when `command === "serve"`. They
+are preview-environment tools — a runtime overlay, a JSX source tagger for the
+visual editor, a log collector — and in a production build the runtime inlined
+its own copy of React into `index.html`, taking it from 1KB to 368KB. If you
+ever see the built `index.html` balloon again, that is what came back.
+
+### Gotchas
+
+- **Anything the browser must fetch needs a root-absolute path** (`/portfolio-assets/…`).
+- **In-page links are `href="#id"` plus a `preventDefault` handler.** A bare
+  `href="work"` resolves relative to the current URL and navigates to `/work`,
+  which no route serves.
+- The repo is **public** — required for Pages. Don't commit anything you would
+  not publish. `.gitignore` already excludes `.env`, `node_modules/`, and
+  `dist/`.
+
+---
+
+## 10. Things that will bite you
 
 - **Not a git repository.** There is no undo. Copy a file before a big edit.
 - The `server/` folder is template scaffolding — auth, database, tRPC. The
