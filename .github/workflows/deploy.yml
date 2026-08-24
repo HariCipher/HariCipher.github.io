@@ -1,0 +1,66 @@
+# Builds the site and publishes it to GitHub Pages on every push to main.
+#
+# Only the Vite build runs here. `pnpm build` also bundles the Express server,
+# which Pages cannot execute — the portfolio is fully static, so the server is
+# simply not part of the deployment.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages needs id-token to accept the artifact; contents:read to clone.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race; the newer push wins.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # corepack honours the "packageManager" pin in package.json, so CI uses
+      # the exact pnpm the project was built with (10.4.1).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: corepack enable
+
+      - run: corepack pnpm install --frozen-lockfile
+      - run: corepack pnpm exec tsc --noEmit
+      - run: corepack pnpm exec vite build
+
+      # The site is a single-page app: any path other than "/" is resolved by
+      # the router in the browser. Pages serves 404.html for unknown paths, so
+      # making it a copy of index.html hands those URLs to the router instead
+      # of showing GitHub's own 404.
+      - run: cp dist/public/index.html dist/public/404.html
+
+      # Dev-only log collector that lives in client/public so the dev server can
+      # serve it. Nothing in the built site requests it.
+      - run: rm -rf dist/public/__manus__
+
+      # Jekyll would otherwise skip files and folders starting with "_".
+      - run: touch dist/public/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
